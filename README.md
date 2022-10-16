@@ -1242,7 +1242,9 @@ jobs:
       run: npm run test-ci
       env:
         CI: true
-
+        FIREBASE_ADMIN_PROJECT_ID: ${{ secrets.FIREBASE_ADMIN_PROJECT_ID }}
+        FIREBASE_ADMIN_PRIVATE_KEY: ${{ secrets.FIREBASE_ADMIN_PRIVATE_KEY }}
+        FIREBASE_ADMIN_CLIENT_EMAIL: ${{ FIREBASE_ADMIN_CLIENT_EMAIL }}
 ```
 
 You can almost kinda guess what each line of that file is doing... 
