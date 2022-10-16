@@ -1254,6 +1254,12 @@ You can almost kinda guess what each line of that file is doing...
 - Install any packages needed for the app to run on the VM.
 - Run a specific NPM script (eg. `npm run test-ci`).
 
+Before we can commit and run the workflow, we need to make sure our GitHub repository is set up with the same "repository secrets" or environment variables as what we have in our `.env` file. Those three Firebase-related variables need to be set up as new secrets in your repo, at your own URL that would follow this format:
+
+`https://github.com/YourGitHubUsername/YourGitHubRepoName/settings/secrets/actions`
+
+Once you have your data set up, you can move on. Commit, push, and wait.
+
 If tests all go well, great! You'll get a green tick in relevant places on GitHub for this repo, such as pull request checks or commit statuses. 
 
 If tests fail, you can dig through for annotations on your pull request or in the Actions tab of your repo.
