@@ -232,7 +232,6 @@ Heroku is one of the simplest deployment platforms around. If your app runs and 
 >
 > At the time of this lesson, the plain free tier should still exist so this is a non-issue -- but worth noting for your big final project of the course if it runs into December!
 
-
 Make sure your ExpressJS app works locally, and then commit your work to GitHub.
 
 That weird trick with the `PORT` we have in our app is really important here -- Heroku will try to assign a random port number through an environment variable, so we need the code we implemented earlier to catch that port number.
@@ -241,8 +240,32 @@ Anyway, with our work all pushed to GitHub, here's the process for Heroku deploy
 
 1. Go to: https://dashboard.heroku.com/
 2. Make a new app.
+    - Call it whatever you want.
+    - Keep its region as whatever it suggested at the start (usually a US region), as most deployment platforms do that to keep costs low.
 3. In the app Deploy -> Deployment Method settings, choose "GitHub".
+    - Connect your accounts together in the "Connect to GitHub" section.
+    - Find your repo and connect it to your Heroku app.
 4. Automatic Deploys should be enabled after that - if not, enable it.
     - If no app is deployed immediately, you can either do a manual deploy (just below automatic deploys) or push a new commit to your repo.
 
 Since the Heroku app is always updated whenever you push a new commit to your repo, your deployed app will reflect the latest version of your server. You won't have to do these steps again, just keep committing and pushing your work to GitHub and the deployed site will automatically reflect your work!
+
+A quirk with Heroku and Node: it'll default to running `npm start`. So if we visit our deployed app per this guide, it should be saying "Hello development world!" -- that's not what we want. Some versions of Heroku would just not start at this poitn, and that's okay too - to get around that (or to change the default command to something other than `npm start`), we need to create a `Procfile`.
+
+A `Procfile` is just an instruction file for Heroku or any other deployment platform that uses Procfiles - and it just specifies what to do when the server receives traffic when deployed.
+
+For our app, we need to make sure our Procfile is named `Procfile` (no file extension!!) and has this as its contents:
+
+`web: npm run start-production`
+
+Commit, push, wait for re-deploy - and your app should now reflect the `start-production` command instead!
+
+### Advanced: Google Cloud Run
+
+If you want to mess around with Google Cloud Platform, use some free tier / free credits, learn a bit of Docker syntax, and learn a bit of GitHub Actions - check out this repo: [https://github.com/AlexHolderDeveloper/ServerToCloudRun](https://github.com/AlexHolderDeveloper/ServerToCloudRun)
+
+Note that it _is_ two years old, so things like GitHub Actions package versions and Google Cloud's web UI might've changed. But the overall steps are still valid - my own BigfootDS production stuff is running on this right now! 
+
+Depending on how we go in-class, we may or may not go over this live, together. Probably not if we're short on time as this is very, very optional given how valid Heroku still is as a deployment option. But it's cool extra stuff for those who want to explore it!
+
+## Routing
