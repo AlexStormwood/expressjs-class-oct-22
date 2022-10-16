@@ -819,8 +819,13 @@ async function databaseConnector(databaseURL){
     await mongoose.connect(databaseURL);
 }
 
+async function databaseDisconnector(){
+    await mongoose.connection.close();
+}
+
 module.exports = {
-    databaseConnector
+    databaseConnector,
+    databaseDisconnector
 }
 
 ```
@@ -834,17 +839,20 @@ This function in this separate file helps us keep database configuration in a si
 ```javascript
 // Import the database connection function
 const { databaseConnector } = require('./database');
-// Establish what the database URL is going to be
-const DATABASE_URI = process.env.DATABASE_URI || 'mongodb://localhost:27017/YourAppNameHere';
-// Connect to the database using the URL
-databaseConnector(DATABASE_URI).then(() => {
-    console.log("Database connected successfully!");
-}).catch(error => {
-    console.log(`
-    Some error occured connecting to the database! It was: 
-    ${error}
-    `)
-});
+// If we're not in test mode, start connecting to the database.
+if (process.env.NODE_ENV != "test") {
+	// Establish what the database URL is going to be
+	const DATABASE_URI = process.env.DATABASE_URI || 'mongodb://localhost:27017/WhateverNameYouWantHere';
+	// Connect to the database using the URL
+	databaseConnector(DATABASE_URI).then(() => {
+		console.log("Database connected successfully!");
+	}).catch(error => {
+		console.log(`
+		Some error occured connecting to the database! It was: 
+		${error}
+		`)
+	});
+}
 
 
 ```
@@ -1087,6 +1095,177 @@ You should have a config var like this:
 Since this string is only known to your deployed app, your local app won't ever be modifying any production database data.
 
 
+## ExpressJS Testing
+
+Testing an API is a bit different to simply testing executable code. A bunch of the stuff "under the hood" of servers and APIs that make them work the way they do makes testing just... get weird. 
+
+### The Server's First Test
+
+First, we need to install two packages: Jest and Supertest.
+
+`npm install --save-dev jest supertest`
+
+These are dev dependencies, they do not impact our production app - so make sure you use `--save-dev` when you install them in the project!
+
+> If you've installed Jest globally already with commands like `npm install -g jest`, that's nice, but it doesn't help when it comes to things like automatically running the tests in a CICD pipeline. 
+>
+> We wanna do that, so even if you've installed Jest globally already - install it in your project too!
+
+With those two packages installed, let's make the first test. Create a file at `tests/server.test.js` and give it this code as its contents:
+
+```javascript
+const mongoose = require("mongoose");
+const request = require('supertest');
+const {app} = require('../src/server');
+const { databaseConnector,databaseDisconnector } = require('../src/database');
+const DATABASE_URI = process.env.DATABASE_TEST_URI || 'mongodb://localhost:27017/WhateverNameYouWantButClearlyForTesting';
+
+// Establish a fresh database connection before each test suite runs
+beforeEach(async () => {
+    await databaseConnector(DATABASE_URI);
+});
+
+// Cleanly close the database connection after each test is done
+// so that test CI/automation tools can exit properly.
+afterEach(async () => {
+    await databaseDisconnector();
+});
+
+describe('Server homepage...', () => {
+    it('shows a Hello message.', async () => {
+        const response = await request(app).get('/');
+        expect(response.statusCode).toEqual(200);
+		expect(response.text).toEqual(expect.stringContaining("Hello"));
+
+    });
+});
+
+```
+
+Now, this test file has a bunch of stuff in it just to run a real basic test. Thankfully, test setup and pack-down doesn't get much bigger than that - usually! 
+
+Jest automatically sets the `NODE_ENV` environment variable to `test`, so our app cleanly realises it's running tests and will only connect to the database inside this test file (not the `server.js` file!).
+
+Because we're connecting and disconnecting from the database cleanly after each test, it'll run smoothly in test automation tools like GitHub Actions. 
+
+### Automatically Running Tests
+
+As far as assessment is concerned, just having Jest implemented and testing your API will be great.
+
+However... wouldn't it be cool to automate when Jest is supposed to run? 
+
+In your project's `package.json` file, we need to edit our `test-ci` script so that it uses a new reporter. This just formats the Jest output in a nicer style for viewing on GitHub in the rare conditions that GitHub Actions needs to make an output, but still:
+
+Before:
+
+`"test-ci": "jest --detectOpenHandles --ci",`
+
+After:
+
+`"test-ci": "jest --detectOpenHandles --ci --reporters='default' --reporters='./tests/GithubActionReporter'", `
+
+Then, we're going to add that fancy "GithubActionReporter" file to our project. Create a file named `GithubActionsReporter.js` inside your `tests` directory and give it this code:
+
+```javascript
+// This is a helper class.
+// Has zero impact on the code here, but is used in CICD.
+// It simply reformats Jest's output in a way that looks
+// better for GitHub Actions reports.
+class GithubActionsReporter {
+    constructor(globalConfig, options) {
+      this._globalConfig = globalConfig
+      this._options = options
+    }
+  
+    onRunComplete(contexts, results) {
+      results.testResults.forEach((testResultItem) => {
+        const testFilePath = testResultItem.testFilePath
+  
+        testResultItem.testResults.forEach((result) => {
+          if (result.status !== 'failed') {
+            return
+          }
+  
+          result.failureMessages.forEach((failureMessages) => {
+            const newLine = '%0A'
+            const message = failureMessages.replace(/\n/g, newLine)
+            const captureGroup = message.match(/:([0-9]+):([0-9]+)/)
+  
+            if (!captureGroup) {
+              console.log('Unable to extract line number from call stack')
+              return
+            }
+  
+            const [, line, col] = captureGroup
+            console.log(
+              `::error file=${testFilePath},line=${line},col=${col}::${message}`,
+            )
+          })
+        })
+      })
+    }
+  }
+  
+  module.exports = GithubActionsReporter
+```
+
+Then, we can move on to the magic automation part. Let's create our first GitHub Actions workflow!
+
+Create a `ci.yml` file in a `.github/workflows` directory - the folder `.github` must be at the top level of your project, otherwise GitHub won't detect it! 
+
+The `ci.yml` file is YAML, another markup language like Markdown - but used to create command lists like a bash/shell script. We need this in the `ci.yml` file:
+
+```yaml
+name: Automated Server Testing
+
+on: 
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run_server_tests:
+    name: Run server tests 
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Configure Node.js '16.x'
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16.x'
+    - run: npm install
+
+    - name: Run tests
+      run: npm run test-ci
+      env:
+        CI: true
+
+```
+
+You can almost kinda guess what each line of that file is doing... 
+
+- On push or on a pull request, run this workflow.
+- Set up an empty Ubuntu virtual machine (every run of a workflow is on a fresh, empty VM!).
+- Install Node onto the workflow's virtual machine.
+- Checkout the repo into the VM.
+- Install any packages needed for the app to run on the VM.
+- Run a specific NPM script (eg. `npm run test-ci`).
+
+If tests all go well, great! You'll get a green tick in relevant places on GitHub for this repo, such as pull request checks or commit statuses. 
+
+If tests fail, you can dig through for annotations on your pull request or in the Actions tab of your repo.
+
+![](./_Documentation/15_FailingTestAnnotationScreen.png)
+
+> OPTIONAL: That screenshot above comes from a repo where the GitHub Action workflow also covers Heroku deployment, so that deployments never deploy test-failing code. If you want to try that out yourself, dig into this repo (and disable automatic deploys that we setup via this repo guide before setting up the GitHub Action deployment!): 
+[https://github.com/AlexHolderDeveloper/expressjs-demo-2022](https://github.com/AlexHolderDeveloper/expressjs-demo-2022)
+
+With tests automatically running, that's it! That's so much content! 
+
+You've scratched a hefty scratch into ExpressJS APIs, MongoDB usage, deployment and testing - but there's always so much more that you can explore! ;)
 
 ## Wrap Up
 

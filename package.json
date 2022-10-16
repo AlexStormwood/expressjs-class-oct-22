@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "test": "jest --detectOpenHandles",
-    "test-ci": "jest --detectOpenHandles --ci",
+    "test-ci": "jest --detectOpenHandles --ci --reporters='default' --reporters='./tests/GithubActionReporter'",
     "start": "NODE_ENV=development node src/index.js",
     "start-production": "NODE_ENV=production node src/index.js",
     "start-dev": "PORT=55000 NODE_ENV=development nodemon src/index.js"
@@ -31,6 +31,8 @@
     "mongoose": "^6.6.5"
   },
   "devDependencies": {
-    "nodemon": "^2.0.20"
+    "jest": "^29.2.0",
+    "nodemon": "^2.0.20",
+    "supertest": "^6.3.0"
   }
 }
