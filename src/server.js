@@ -55,6 +55,21 @@ firebaseAdmin.initializeApp({
 });
 
 
+// Import the database connection function
+const { databaseConnector } = require('./database');
+// Establish what the database URL is going to be
+const DATABASE_URI = process.env.DATABASE_URI || 'mongodb://localhost:27017/octTesto';
+// Connect to the database using the URL
+databaseConnector(DATABASE_URI).then(() => {
+    console.log("Database connected successfully!");
+}).catch(error => {
+    console.log(`
+    Some error occured connecting to the database! It was: 
+    ${error}
+    `)
+});
+
+
 
 // Actual server behaviour
 app.get('/', (req, res) => {

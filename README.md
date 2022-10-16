@@ -355,7 +355,9 @@ That's pretty much it for routing and sending data via routes - you can absolute
 
 ## Authentication
 
-Using Firebase for auth as it has a nice (though potentially long-winded) way of setting of accounts, and supports a huge variety of options.
+We're using Firebase for auth as it has a nice (though potentially long-winded) way of setting up accounts, and supports a huge variety of options. And it's free! 
+
+### Firebase Setup
 
 Go here and make a project (including any accounts you might need to make): [https://console.firebase.google.com/](https://console.firebase.google.com/)
 
@@ -444,6 +446,51 @@ firebaseAdmin.initializeApp({
 
 ...Yeah, there's a weird formatting issue with the private key as far as JSON is concerned. It's weird. But a bit of string find-and-replace magic fixes things!
 
+We have to jump back to Firebase and set up some _client_ credentials. These are different to the admin credentials that we set up earlier, as so:
+
+- Admin credentials: Manage accounts with admin powers, access whatever data we need whenever we need it. Useful for creating, deleting, or otherwise editing user accounts.
+- Client credentials: Act as a user to generate auth tokens (eg. JWT) for identify verification in other actions, such as creating user-specific posts. 
+
+Admins cannot act as users, which means to generate a JWT cleanly we need to use the Firebase client system. It's weird, I know. 
+
+> Firebase is not really meant to be a MERN package - it's a cloud service that replaces backends instead. 
+>
+> But it's importantly free, easy to use, and easy to customize - so it's worthwhile to hack it to bits and squeeze functionality into apps that need the functionality that Firebase provides.
+> 
+> It's also a good MongoDB alternative, but that's beyond the scope of the course and won't be allowed in your assessment! 
+>
+> If you're going to use Firebase in your assessment, you can only use authentication and file storage!
+
+Go back to your Firebase "Project Settings" page, and down in the "Your apps" section select your current app. Select the "Config" option -- you would've used the "npm" option so far. The "Config" option represents the keys that a front-end app would use. The Firebase client library works in the back-end just fine, and will help us by providing additional user functionality alongside the Firebase Admin SDK. It's weird but basically the Admin SDK handles some things that the Client SDK doesn't, and vice versa.
+
+Should be a JavaScript file like this:
+
+```javascript
+const firebaseClientConfig = {
+  apiKey: "some key",
+  authDomain: "some URL",
+  projectId: "Firebase project ID",
+  storageBucket: "some URL",
+  messagingSenderId: "some ID",
+  appId: "some Firebase app ID",
+  measurementId: "some Google Analytics ID"
+};
+
+module.exports = {firebaseClientConfig}
+
+```
+
+Save that as its own file somewhere in your project. For example, check out what this very repo has here: 
+[https://github.com/AlexHolderDeveloper/expressjs-class-oct-22/blob/main/keys/FirebaseClientKey.js](https://github.com/AlexHolderDeveloper/expressjs-class-oct-22/blob/main/keys/FirebaseClientKey.js)
+
+Note that your Admin SDK key was a dedicated JSON file turned into some environment variables, while this is just plain JavaScript. Why? Because these credentials are made for usage in the client app (the frontend!) - and anything stored in a client app should be assumed to be accessible by a person using the client app.
+
+So, we can store these in our git history and things should be mostly fine. 
+
+
+
+### User Auth Functionality
+
 To help give our auth routes a skeleton (no auth functionality yet!), add this code to your `src/User/UserRoutes.js` file:
 
 ```javascript
@@ -517,47 +564,14 @@ JWTs and other token-based auth systems typically have an expiration date, meani
 
 ```
 
-We have to jump back to Firebase and set up some _client_ credentials. These are different to the admin credentials that we set up earlier, as so:
 
-- Admin credentials: Manage accounts with admin powers, access whatever data we need whenever we need it. Useful for creating, deleting, or otherwise editing user accounts.
-- Client credentials: Act as a user to generate auth tokens (eg. JWT) for identify verification in other actions, such as creating user-specific posts. 
+With our routes now in a "skeleton" form, it's time to put some meat on those bones!
 
-Admins cannot act as users, which means to generate a JWT cleanly we need to use the Firebase client system. It's weird, I know. 
+Install the Firebase Client SDK with this command: 
 
-> Firebase is not really meant to be a MERN package - it's a cloud service that replaces backends instead. 
->
-> But it's importantly free, easy to use, and easy to customize - so it's worthwhile to hack it to bits and squeeze functionality into apps that need the functionality that Firebase provides.
-> 
-> It's also a good MongoDB alternative, but that's beyond the scope of the course and won't be allowed in your assessment! 
->
-> If you're going to use Firebase in your assessment, you can only use authentication and file storage!
+`npm install firebase`
 
-Go back to your Firebase "Project Settings" page, and down in the "Your apps" section select your current app. Select the "Config" option -- you would've used the "npm" option so far. The "Config" option represents the keys that a front-end app would use. The Firebase client library works in the back-end just fine, and will help us by providing additional user functionality alongside the Firebase Admin SDK. It's weird but basically the Admin SDK handles some things that the Client SDK doesn't, and vice versa.
-
-Should be a JavaScript file like this:
-
-```javascript
-const firebaseClientConfig = {
-  apiKey: "some key",
-  authDomain: "some URL",
-  projectId: "Firebase project ID",
-  storageBucket: "some URL",
-  messagingSenderId: "some ID",
-  appId: "some Firebase app ID",
-  measurementId: "some Google Analytics ID"
-};
-
-module.exports = {firebaseClientConfig}
-
-```
-
-Note that your Admin SDK key was a dedicated JSON file turned into some environment variables, while this is just plain JavaScript. Why? Because these credentials are made for usage in the client app (the frontend!) - and anything stored in a client app should be assumed to be accessible by a person using the client app.
-
-So, we can store these in our git history and things should be mostly fine. 
-
-Install the Firebase Client SDK with this command: `npm install firebase`
-
-Then, create a `src/User/UserFunctions.js` file and give it these contents:
+Create a `src/User/UserFunctions.js` file and give it these contents:
 
 ```javascript
 
@@ -661,7 +675,427 @@ module.exports = {
 
 ```
 
+Once we've made the functions, we can tell our user routes to use them. 
+
+```javascript
+
+const express = require('express');
+
+const routes = express.Router();
+
+const {signUpUser, signInUser, validateUserSession} = require ('./UserFunctions');
+
+
+// Create a user, a session token & a refresh token
+routes.post('/sign-up', async (request, response) => {
+    // Process posted form/json data
+    let newUserDetails = {
+        email: request.body.email,
+        password: request.body.password,
+        displayName: request.body.username
+    }
+    // Ideally perform validation on those properties before moving on.
+    // Not in the scope of this guide though! ;) 
+
+    // Hand data to a sign-up function
+    let signUpResult = await signUpUser({email:newUserDetails.email, password:newUserDetails.password});
+    // Return error or token as response
+    if (signUpResult.error != null){
+        console.log("Stopping the signup process due to an error. See logs for details.");
+        response.json(signUpResult);
+        return;
+    }
+
+    // Sign in to get latest user claims (authorization).
+    let signInResult = await signInUser({email:newUserDetails.email, password:newUserDetails.password});
+    
+    // If an error message exists, return that.
+    if (signInResult.error != null){
+        console.log("Stopping the signup process due to an error. See logs for details.");
+        response.json(signInResult);
+        return;
+    }
+
+    // On success, return a signed-in session to the brand-new user:
+    response.json(signInResult);
+});
+
+// Create a session token & refresh token
+routes.post('/sign-in', async (request, response) => {
+    // Process posted form/json data
+    let newUserDetails = {
+        email: request.body.email,
+        password: request.body.password,
+        displayName: request.body.username
+    }
+    // Ideally perform validation on those properties before moving on.
+    // Not in the scope of this guide though! ;) 
+
+    // Hand data to a sign-in function
+    let signInResult = await signInUser({email:userDetails.email, password:userDetails.password});
+    
+    // If an error message exists, return that.
+    if (signInResult.error != null){
+        console.log("Stopping the signup process due to an error. See logs for details.");
+        response.json(signInResult);
+        return;
+    }
+
+    // On success, return a signed-in session to the brand-new user:
+    response.json(signInResult);
+});
+
+// Create a session token & refresh token
+routes.post('/validate-session', async (request, response) => {
+    // Process posted form/json data
+    let newUserDetails = {
+        idToken: request.body.idToken,
+        refreshToken: request.body.refreshToken,
+    }
+
+    // Hand data to a validation function
+    let validationResult = await validateUserSession({refreshToken: sessionDetails.refreshToken, idToken:sessionDetails.idToken})
+    
+    // Return error or token as response
+    response.json(validationResult);
+});
+
+module.exports = routes;
+
+```
+
+Woohoo! Test things out locally before moving on - there's some config we need to do before deployment now!
+
+### Heroku Environment Variables
+
 Commit and push your work again to see how things work on the live deployed app. 
 
-And remember to use Postman or another network request tool to test out non-GET routes!
+.............you should get errors!
 
+Why? Because the deployed app is a different environment to our local machine, and we've put the `.env` into the `.gitignore` file so its contents will never get deployed. 
+
+Luckily, all deployment services have a way to configure environment variables. In Heroku, they are "Config Vars". Dig around the Heroku dashboard of your app, find its settings, and jump down to the "Config Vars" section.
+
+![](./_Documentation/06_HerokuConfigVars.png)
+
+Every key in your `.env` file should be replicated here. One line is one key-value pair, so copy each key name and key value across! 
+
+![](./_Documentation/07_HerokuConfigVarsDone.png)
+
+With that all configured and coded up, you should be able to make requests to your deployed API using Postman and make some users!
+
+![](./_Documentation/08_DeployedUserFunctionality.png)
+
+
+As you can see, there's a lot of user data you can also work with, such as usernames and profile pictures. Even email validation! That's not strictly necessary for apps to just reach "Minimum Viable Product" though, so that can be something to explore or discuss later! ;) 
+
+## MongoDB
+
+Make sure you have MongoDB installed and can access its shell! (Its shell is accessed via the mongosh command.)
+
+### MongoDB Shell Setup
+
+WSL users, if you're on WSL - yes, WSL people! Pay attention! MongoDB is a bit of a mess, please pay attention! WSL users must:
+- Follow these installation steps from _this specific section_ of this page: https://docs.microsoft.com/en-gb/windows/wsl/tutorials/wsl-database#install-mongodb
+
+- Set up the service commands specified here: https://learn.microsoft.com/en-gb/windows/wsl/tutorials/wsl-database#add-the-init-script-to-start-mongodb-as-a-service
+
+Other platforms can follow the official MongoDB docs - we need a mongo/mongodb shell to continue! Make sure you can open up a MongoDB shell and see something like the below:
+
+![](./_Documentation/09_MongoShell.png)
+
+
+
+### MongoDB in JavaScript
+
+Make a `database.js` file in the project src directory (or within an equivalent directory right next to your `index.js` file). Put this code in it:
+
+```javascript
+
+const mongoose = require('mongoose');
+
+
+async function databaseConnector(databaseURL){
+    await mongoose.connect(databaseURL);
+}
+
+module.exports = {
+    databaseConnector
+}
+
+```
+
+As you can see, it requires something called "mongoose" - it's a handler for MongoDB connections that uses slightly different syntax than the standard MongoDB NodeJS Driver. Install Mongoose with:
+
+`npm install mongoose --save`
+
+This function in this separate file helps us keep database configuration in a simpler space. However, we will still be using it in our `server.js` file. Add this in your `server.js` file somewhere before the routes:
+
+```javascript
+// Import the database connection function
+const { databaseConnector } = require('./database');
+// Establish what the database URL is going to be
+const DATABASE_URI = process.env.DATABASE_URI || 'mongodb://localhost:27017/YourAppNameHere';
+// Connect to the database using the URL
+databaseConnector(DATABASE_URI).then(() => {
+    console.log("Database connected successfully!");
+}).catch(error => {
+    console.log(`
+    Some error occured connecting to the database! It was: 
+    ${error}
+    `)
+});
+
+
+```
+
+You may notice that this is using another environment variable - we have to set up a production database on Heroku to make our deployed web server work properly! However, if no environment variable is provided, our database will just connect to a local MongoDB service with the database named "yourappname".
+
+We won't worry about deployment or production databases just yet, as we need to set up some stuff to properly handle our database config data.
+
+So, we're going to create a Schema. Yes, even in fluid & flexible Document Database Land, we will use some structure & order and put a Schema into our system. We need to know that there will be consistent data in these documents.
+
+Make a file named `PostSchema.js` in `src/database/schemas` -- yep, making two folders too. Your schema should look like this:
+
+```javascript
+const mongoose = require('mongoose');
+
+const PostSchema = new mongoose.Schema({
+    postTitle: String,
+    postContent: String,
+    postAuthorID: String
+})
+
+PostSchema.methods.getAuthorName = async function getAuthorName(){
+    console.log(`Use your auth system to search for a user with ID of ${this.postAuthorID} and get their username/displayname.`)
+}
+
+
+// Make sure this is last;
+// The ".model()" process bundles up all properties & methods written above into the model,
+// but it won't capture properties or methods written after ".model()" within this file.
+const Post = mongoose.model('Post', PostSchema);
+
+module.exports = {Post}
+
+```
+
+If you're curious about the types your schema can use for its properties, check out this link: 
+[https://mongoosejs.com/docs/api/schema.html#schema_Schema.Types](https://mongoosejs.com/docs/api/schema.html#schema_Schema.Types) 
+
+Or this list:
+
+String
+Number
+Boolean | Bool
+Array
+Buffer
+Date
+ObjectId | Oid
+Mixed
+As you can see, we can create both a schema and a model in the same file. This way, only the model is exposed to the rest of the app - any model setup is already done by the schema.
+
+You will also see a placeholder function - that's a challenge for later, but basically you can use a model method that will perform other actions with a document's own data. Like a class instance method! So a document could call "getAuthorName()" and fire off a request to the Firebase Auth system to retrieve a username, even though the document only contains the user ID. Wouldn't that be cool?
+
+Now, a cool thing about Mongoose is that it's a smart system. By simple requiring Mongoose at the start of the file, anything we do with that Mongoose instance is already applied to the overall Mongoose database system.
+
+This means that the Post model that we just made is now part of the database - no additional connections or calls or configuration needed. We just said "mongoose.model()" and it knows to take a schema and turn it into a database model.
+
+Now, we're going to add some more-complex functionality to the Blog routes that we made earlier. This is a pretty good sign that we should create separate files for BlogFunctions, to keep our BlogRoutes tidy.
+
+Create `BlogFunctions.js` inside your `src/Blog/` folder and add in some code:
+
+```javascript
+const {Post} = require('../database/schemas/PostSchema');
+
+// Model.find() with no conditions inside "find()" will return all documents of that Model
+async function getAllPosts(){
+    let allPosts = await Post.find();
+    return JSON.stringify(allPosts);
+}
+
+// The ".exec()" helps the query just run instead of saving it for re-use.
+async function getSpecificPost(postID){
+    let specificPostQuery = await Post.findById(postID).exec();
+    return specificPostQuery;
+}
+
+// New Post instance needs to be specifically saved for it to be stored in the database.
+async function createSpecificPost(postDetails){
+    let newPost = new Post({
+        postTitle: postDetails.postTitle,
+        postContent: postDetails.postContent,
+        postAuthorID: postDetails.postAuthorID
+    })
+    let creationResult = await newPost.save();
+    return creationResult;
+}
+
+// Theoretically, you could use this instead of "new Post({})" thanks to upsert.
+async function updateSpecificPost(postDetails){
+    let updateResult = await Post.findByIdAndUpdate(
+        {_id: postDetails.postID},
+        {
+            postTitle: postDetails.postTitle,
+            postContent: postDetails.postContent,
+            postAuthorID: postDetails.postAuthorID
+        },
+        { 
+            upsert: true, // upsert means it'll create document if it doesn't exist
+            new: true // return the new modified doc. if false, original is returned.
+        } 
+    );
+
+    return updateResult;
+}
+
+// Returns an empty object if all goes well.
+async function deleteSpecificPost(postID){
+    let deletionResult = await Post.deleteOne({ _id: postID});
+    return deletionResult;
+}
+
+module.exports = {
+    getAllPosts, getSpecificPost, createSpecificPost, updateSpecificPost, deleteSpecificPost
+}
+
+```
+
+A lot of functionality is inspired by what Mongoose provides in their querying functionality - have a look at their queries documentation here: [https://mongoosejs.com/docs/queries.html](https://mongoosejs.com/docs/queries.html)
+
+Jumping back to our BlogRoutes file, we can start implementing our functions from BlogFunctions.
+
+```javascript
+const express = require('express');
+const { getSpecificPost, getAllPosts, createSpecificPost, updateSpecificPost, deleteSpecificPost } = require('./BlogFunctions');
+
+// Create a bundle of routes. We'll export this out and then import it into src/index.js.
+const routes = express.Router();
+
+// This is the "root" route for the Router instance. 
+// Its actual name in the URL will depend on how it's configured in src/index.js
+routes.get('/', async (request, response) => {
+
+    let queryResult = await getAllPosts();
+    response.json(queryResult);
+    //response.json(`Received a request on ${request.originalUrl}`);
+});
+
+// Set up route params with the colon before the name.
+routes.get('/:postID', async (request, response) => {
+
+    let queryResult = await getSpecificPost(request.params.postID);
+    response.json(queryResult)
+    // response.json(`Received a GET request for a post with ID of ${request.params.postID}`);
+
+});
+
+routes.put('/:postID', async (request, response) => {
+
+    let updateResult = await updateSpecificPost({
+        postID: request.params.postID,
+        postTitle: request.body.postTitle,
+        postContent: request.body.postContent,
+        postAuthorID: request.body.postAuthorID
+    })
+
+    response.json(updateResult);
+});
+
+routes.delete('/:postID', async (request, response) => {
+    let deleteResult = deleteSpecificPost(request.params.postID);
+    response.json(deleteResult);
+
+});
+
+// Use Postman or another HTTP tool to visit a POST route.
+routes.post('/', async (request, response) => {
+    
+    let creationResult = await createSpecificPost({
+        postTitle: request.body.postTitle,
+        postContent: request.body.postContent,
+        postAuthorID: request.body.postAuthorID
+    })
+
+    response.json(creationResult);
+    
+    // Cleanly build a response OBJ
+    // let jsonResponse = {
+    //     message:`Received a POST request for a post with ID of ${request.params.postID}`,
+    //     receivedBody: request.body
+    // }
+
+    // response.json(jsonResponse);
+});
+
+
+module.exports = routes;
+
+
+```
+
+Try it out locally with Postman! You may have to copy the post ID from a response into specific requests, such as making a post & copying its ID to use in find/update/delete requests.
+
+
+### Checking Your Database Shell
+
+In `mongosh` (the MongoDB shell), you should be able to find your database and see its raw data. 
+Once you're inside the MongoDB shell, run the command `show dbs` to see all available databases on your machine.
+
+For example, this repo uses "octTesto" as its local database name - so running `show dbs` shows me a list of databases that includes `octTesto` and notes its file size.
+
+Then, run `use YourAppName` (replacing YourAppName with your database name) to start working with your server's database. For example, this repo would use `use octTesto` to start working with its database in the MongoDB shell.
+
+Then, you should be able to run commands like db.posts.find() to see all documents. You can check out [the MongoDB docs for more commands](https://docs.mongodb.com/manual/crud/) - just remember that MongoDB commands aren't always the same as Mongoose functions!
+
+![](./_Documentation/10_MongoShellWithData.png)
+
+### MongoDB Cloud Atlas
+
+Deploying MongoDB databases provides a lot of options. You could find a way to self-host MongoDB on some virtual machine - but then, you could do that with literally any database anyway. Figuring that out for each specific database service can be time-consuming, so MongoDB provides a nifty cloud platform to help us just get things done faster.
+
+We're gonna set up a MongoDB Cloud Atlas database. It's like MongoDB, but in the cloud! And its free tiers cover everything we need for classwork _and_ assessment, so let's jump in!
+
+Visit [https://www.mongodb.com/](https://www.mongodb.com/) and make an account.
+
+If you have a brand-new account, awesome - make a project, then make a database or "database deployment". 
+
+Choose the "Shared" cluster or database option wherever it pops up, otherwise you should be able to stick to the default settings.
+
+Whatever username & password you set (and set that, do NOT set some certificate or other DB auth method), remember it. We need that in our database connection URL!
+
+Once your database is made & ready to use in the MongoDB dashboard, we need to find out what its connection URL actually is. Go to the "Command Line Tools" section of your database:
+
+![](./_Documentation/11_MongoDBCLIToolsButton.png)
+
+From the page that the button takes you to, you should be able to see a heading in the center of the page that says "Connect To Your Cluster" - click on its "Connect Instructions" button. Then, click on "Connect your application" - you should see a page like this:
+
+![](./_Documentation/12_MongoDBConnectURI.png)
+
+The thing that we want is the connection string that looks like this:
+
+mongodb+srv://DatabaseUsername:DatabasePassword@ClusterName.tntdl.mongodb.net/DatabaseNameInMongoSH?retryWrites=true&w=majority
+
+Depending on your database settings, your string should be unique to you. And of course, it requires the username and password that you set when creating your database.
+
+You want to put that string into Heroku as another config var, but make sure that it contains the right username & password!
+
+You should have a config var like this:
+
+![](./_Documentation/13_HerokuMongoDBConnection.png)
+
+Since this string is only known to your deployed app, your local app won't ever be modifying any production database data.
+
+
+
+## Wrap Up
+
+Woo! That's a lot of development. 
+
+Some cool things to try out in your own time:
+
+- Split each and any appropriate instance of `express.Router()` into its own app. That's a micro-service!
+
+- Explore deployment with Docker! If you can bundle up your app into a Docker file, then your app can run on any service that supports Docker images. It _can_ help widen your horizons for both deployment options and job prospects (devops, woo!) if you can wrap your head around it, but it's a bit complex!
+
+- Look at validation of data using middleware such as `express-validator`. There's no real standard practice for validation in NodeJS backends, since validation can be as simple as "if password doesn't contain a number, reject it" - so there'll be a lot of exploration that you can do there! 
