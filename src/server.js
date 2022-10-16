@@ -41,6 +41,21 @@ var corsOptions = {
 }
 app.use(cors(corsOptions));
 
+// Load up the .env file and store its values into process.env
+require('dotenv').config()
+
+// Establish Firebase and give it valid admin credentials
+const firebaseAdmin = require('firebase-admin');
+firebaseAdmin.initializeApp({
+    credential: firebaseAdmin.credential.cert({
+        "projectId": process.env.FIREBASE_ADMIN_PROJECT_ID,
+        "privateKey": process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        "clientEmail":process.env.FIREBASE_ADMIN_CLIENT_EMAIL
+    }),
+});
+
+
+
 // Actual server behaviour
 app.get('/', (req, res) => {
 	console.log('ExpressJS API homepage received a request.');
@@ -54,8 +69,11 @@ app.get('/', (req, res) => {
 
 
 // Configure any assembled routes and attach them to the server instance.
-// const routesDice = require('./routes/dice');
-// app.use('/dice', routesDice);
+const importedBlogRouting = require('./Blog/BlogRoutes');
+app.use('/blog', importedBlogRouting);
+
+const importedUserRouting = require('./User/UserRoutes');
+app.use('/user', importedUserRouting)
 
 // Notice that we're not calling app.listen() anywhere in here.
 // This file contains just the setup/config of the server,

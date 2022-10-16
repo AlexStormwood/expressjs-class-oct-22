@@ -8,7 +8,7 @@
     "test-ci": "jest --detectOpenHandles --ci",
     "start": "NODE_ENV=development node src/index.js",
     "start-production": "NODE_ENV=production node src/index.js",
-    "start-dev":"PORT=55000 NODE_ENV=development nodemon src/index.js"
+    "start-dev": "PORT=55000 NODE_ENV=development nodemon src/index.js"
   },
   "repository": {
     "type": "git",
@@ -23,7 +23,10 @@
   "homepage": "https://github.com/AlexHolderDeveloper/expressjs-class-oct-22#readme",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
+    "firebase": "^9.12.1",
+    "firebase-admin": "^11.1.0",
     "helmet": "^6.0.0"
   },
   "devDependencies": {
