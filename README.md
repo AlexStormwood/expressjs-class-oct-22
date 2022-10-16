@@ -1238,6 +1238,9 @@ jobs:
         node-version: '16.x'
     - run: npm install
 
+    - name: Start MongoDB
+      uses: supercharge/mongodb-github-action@1.8.0
+
     - name: Run tests
       run: npm run test-ci
       env:
