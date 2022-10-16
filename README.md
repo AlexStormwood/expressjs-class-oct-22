@@ -1257,6 +1257,7 @@ You can almost kinda guess what each line of that file is doing...
 - Install Node onto the workflow's virtual machine.
 - Checkout the repo into the VM.
 - Install any packages needed for the app to run on the VM.
+- Install MongoDB into the VM and start it up.
 - Run a specific NPM script (eg. `npm run test-ci`).
 
 Before we can commit and run the workflow, we need to make sure our GitHub repository is set up with the same "repository secrets" or environment variables as what we have in our `.env` file. Those three Firebase-related variables need to be set up as new secrets in your repo, at your own URL that would follow this format:
@@ -1273,6 +1274,12 @@ If tests fail, you can dig through for annotations on your pull request or in th
 
 > OPTIONAL: That screenshot above comes from a repo where the GitHub Action workflow also covers Heroku deployment, so that deployments never deploy test-failing code. If you want to try that out yourself, dig into this repo (and disable automatic deploys that we setup via this repo guide before setting up the GitHub Action deployment!): 
 [https://github.com/AlexHolderDeveloper/expressjs-demo-2022](https://github.com/AlexHolderDeveloper/expressjs-demo-2022)
+
+> NOTE: Most other guides about Jest with databases and servers will do things differently. There's no "one technique to rule them all" here.
+>
+> Most commonly, different resources will say to test the database by simply testing on another MongoDB Cloud Atlas database - and that's perfectly reasonable. However, that might burn through free tiers or impact production data or various other factors might pop up that are just.. not worth dealing with. 
+>
+> This guide uses MongoDB in a GitHub Actions workflow VM, meaning it's basically behaving the same way as your local/development environment.
 
 With tests automatically running, that's it! That's so much content! 
 
